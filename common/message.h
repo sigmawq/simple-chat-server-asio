@@ -75,6 +75,13 @@ namespace scs {
         memset(ptr, 0, sizeof(T));
     }
 
+    template<typename T>// Convert message_base to one of "derived" structures
+    [[nodiscard]] inline T *base_to_derived(message_base &base) {
+        T *converted = reinterpret_cast<T *>(&base);
+        (*converted) = T();
+        return converted;
+    }
+
     void send_message_raw(
             boost::asio::ip::tcp::socket &socket,
             message_base* message,
@@ -83,7 +90,7 @@ namespace scs {
         int msg_size = to - from;
         boost::asio::const_buffer cbuff(message, msg_size);
 
-        auto on_send = [&socket, &message, &msg_size, &to](
+        auto on_send = [&socket, &message, msg_size, to](
                 const boost::system::error_code &error,
                 std::size_t bytes_transferred
         ) {
@@ -95,17 +102,25 @@ namespace scs {
                 }
                 std::cout << "Message sent!" << std::endl;
             } else {
-                std::cout << "Error while sending a message!" << std::endl;
+                std::cout << "Error while sending a message: " << error.message() << std::endl;
             }
         };
         socket.async_send(cbuff, on_send);
     }
 
-    void send_chat_message(ip::tcp::socket* socket,
-                           const char* message, size_t size){
+    void send_chat_message_from_cstr(ip::tcp::socket& socket,
+                                     const char* message, size_t size){
         message_chat m;
         m.set_message(message, size);
-        send_message_raw(*socket, (message_base*)&m, 0, READBUFF_SIZE);
+        send_message_raw(socket, (message_base*)&m, 0, READBUFF_SIZE);
+    }
+
+    void send_chat_message(ip::tcp::socket& socket, message_chat& message){
+        send_message_raw(socket, reinterpret_cast<message_base*>(&message), 0, READBUFF_SIZE);
+    }
+
+    void send_username(ip::tcp::socket& socket, message_user& message){
+        send_message_raw(socket, reinterpret_cast<message_base*>(&message), 0, READBUFF_SIZE);
     }
 
         /*
@@ -136,13 +151,6 @@ namespace scs {
             });
         }
 
-        // Convert message_base to one of "derived" structures
-        template<typename T>
-        [[nodiscard]] inline T *base_to_derived(message_base &base) {
-            T *converted = reinterpret_cast<T *>(&base);
-            (*converted) = T();
-            return converted;
-        }
 
         // Make sure convenience structure's sizes are less than main structure size
         constexpr size_t mbs = sizeof(message_base);

@@ -77,9 +77,10 @@ namespace scs{
 
     // Use server socket value for client side
     // and nullptr value for server
-    bool start_reading_from_user(
-            ip::tcp::socket* target_socket,
-            std::map<const std::string, user_action_fptr>* user_action_map
+    bool start_reading_from_user(ip::tcp::socket* target_socket,
+                                 std::map<const std::string,
+                                 user_action_fptr>* user_action_map,
+                                 io_context* ios
             ){
         bool runs = true;
         while (true){
@@ -88,6 +89,7 @@ namespace scs{
 
             // This check is a special case
             if (new_input == "/exit") {
+                ios->stop();
                 break;
             }
             auto parsed = scs::receive_and_parse_input(new_input);
@@ -115,7 +117,7 @@ namespace scs{
             // Send chat message to socket (Only for client)
             else {
                 if (socket != nullptr){
-                    send_chat_message(target_socket, new_input.c_str(), new_input.size());
+                    send_chat_message_from_cstr(*target_socket, new_input.c_str(), new_input.size());
                 }
             }
 

@@ -75,7 +75,7 @@ namespace scs{
         socket.close();
     }
 
-    void connect(std::string& address, std::string& port){
+    bool connect(std::string& address, std::string& port){
         try{
             int16_t port_int = get_port(port.c_str());
             endpoint = ip::tcp::endpoint(
@@ -83,12 +83,15 @@ namespace scs{
                     port_int);
             socket.connect(endpoint);
             std::cout << "Connected to " << endpoint.address().to_string() << std::endl;
+            return true;
         }
         catch (std::exception& e){
             std::cout << e.what() << std::endl;
+            return false;
         }
         catch (boost::system::system_error& e){
             std::cout << e.what() << std::endl;
+            return false;
         }
     }
 
@@ -97,13 +100,22 @@ namespace scs{
     }
 
     void launch(std::string& address, std::string& port, std::string& username){
-        connect(address, port);
-        std::cout << "Connected" << std::endl;
-        auto end = std::async(start_reading_from_user, &socket, &user_action_map);
+        if (!connect(address, port)){
+            std::cout << "Connection failed";
+            return;
+        }
+
+        // This should be a separate function, but the whole message system needs some rework
         message_base mb;
+        auto casted = base_to_derived<message_user>(mb);
+        casted->set_message(username.c_str(), username.size());
+        send_username(socket, *casted);
+
+        auto end = std::async(start_reading_from_user, &socket, &user_action_map, &ios);
+        message_base mb2;
         mb.erase();
-        scs::start_listen_to_socket_continuously(socket, &mb,
-                                                 handle_incoming_bouncing_action, 0, READBUFF_SIZE);
+        scs::start_listen_to_socket_continuously(
+                socket, &mb2, handle_incoming_bouncing_action, 0, READBUFF_SIZE);
 
         ios.run();
         // ========================
