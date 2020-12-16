@@ -85,7 +85,7 @@ namespace scs{
         bool runs = true;
         while (true){
             std::string new_input;
-            std::cin >> new_input;
+            std::getline(std::cin, new_input);
 
             // This check is a special case
             if (new_input == "/exit") {

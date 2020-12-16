@@ -71,6 +71,11 @@ namespace scs{
         }
     }
 
+    void handle_socket_eof(ip::tcp::socket* socket){
+        std::cout << "Server closed connection" << std::endl;
+        ios.stop();
+    }
+
     void disconnect(){
         socket.close();
     }
@@ -115,7 +120,7 @@ namespace scs{
         message_base mb2;
         mb.erase();
         scs::start_listen_to_socket_continuously(
-                socket, &mb2, handle_incoming_bouncing_action, 0, READBUFF_SIZE);
+                &socket, &mb2, handle_incoming_bouncing_action, handle_socket_eof, 0, READBUFF_SIZE);
 
         ios.run();
         // ========================

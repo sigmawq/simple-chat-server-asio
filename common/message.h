@@ -1,8 +1,12 @@
 //
 // Created by swql on 12/5/20.
 /*
- * //TODO: Add description
+ * Communication protocol and common (used by both server and client) actions are defined in this header
+ * message_base is a general structure that can be converted to it's "derived" (no inheritance) child structures
+ * any message_* child structure will always be less or equal than message_base base structure.
+ * message_base structure is currently defined to be 1024 bytes long (READBUFF_SIZE)
  */
+// TODO: Add description for child structures
 //
 
 #ifndef UNTITLED_MESSAGE_H
@@ -10,6 +14,7 @@
 
 #include <chrono>
 #include <string>
+#include <list>
 #include <cstring>
 #include <ctime>
 #include <cstdint>
@@ -19,8 +24,6 @@
 using namespace boost::asio;
 
 namespace scs {
-    constexpr int READBUFF_SIZE = 1024;
-    constexpr int USERNAME_SIZE = 32;
 
     enum HEADER_CODE : int32_t {
         USERNAME, INFO, CHAT_MESSAGE,
@@ -35,7 +38,7 @@ namespace scs {
         HEADER_CODE code;
         char message[READBUFF_SIZE] {0};
         void erase(){
-            memset(this, 0, sizeof(message_base));
+                memset(this, 0, sizeof(message_base));
         }
     };
 
@@ -124,33 +127,39 @@ namespace scs {
     }
 
         /*
-         * Listen for incoming messages, when a message arrives function forwards it to the
-         * assigned handler of type bouncing_action_fptr
-         * // TODO: add different (?) handlers for different errors
-         */
+         * Listen for incoming messages, when a message arrives function forwards it to the assigned
+         * handler of type bouncing_action_fptr. When socket read results in EOF then handler of type
+         * eof_handler is invoked. */
         void start_listen_to_socket_continuously(
-                ip::tcp::socket &socket,
-                message_base* buffer,
-                bouncing_action_fptr handler,
+                ip::tcp::socket* socket, message_base* buffer,
+                bouncing_action_fptr handler, eof_handler eof_h,
                 int from, int to
         ) {
             std::size_t buffer_size = to - from;
             boost::asio::mutable_buffer cbuff{(void *) buffer, buffer_size};
-            socket.async_receive(cbuff, [=, &socket](const boost::system::error_code &err, std::size_t bytes_read) {
+            socket->async_receive(
+                    cbuff,[socket, to, from, handler, eof_h, buffer, buffer_size]
+            (const boost::system::error_code &err, std::size_t bytes_read) {
                 if (!err) {
                     if (bytes_read < buffer_size) {
-                        start_listen_to_socket_continuously(socket, buffer, handler, bytes_read, to);
+                        start_listen_to_socket_continuously(socket, buffer, handler,
+                                                            eof_h, bytes_read, to);
                         return;
                     } else {
-                        handler(&socket, buffer);
+                        handler(socket, buffer);
                         buffer->erase();
-                        start_listen_to_socket_continuously(socket, buffer, handler, 0, to);
+                        start_listen_to_socket_continuously(socket, buffer, handler,
+                                                            eof_h, 0, to);
                     }
                 }
-                // TODO: Handle different errors and "errors"
+                else if (err.value() == boost::asio::error::eof){
+                    eof_h(socket);
+                }
+                else {
+                    std::cout << "Error while receiving from socket: " << err.message() << std::endl;
+                }
             });
         }
-
 
         // Make sure convenience structure's sizes are less than main structure size
         constexpr size_t mbs = sizeof(message_base);
