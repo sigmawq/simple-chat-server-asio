@@ -30,8 +30,17 @@ namespace scs {
     };
 
     enum HEADER_SUBCODE : int32_t {
-        SIMPLE_PING
+        SIMPLE_PING,
+        _ERROR_SECTION_START,
+            ERROR_WRITE_NOT_ALLOWED, ERROR_USERNAME_FAILED, _ERROR_SECTION_END
     };
+
+    bool is_error(HEADER_SUBCODE subcode){
+        if (subcode > _ERROR_SECTION_START && subcode <= _ERROR_SECTION_END){
+            return true;
+        }
+        return false;
+    }
 
     // Message pattern is used as a base for other messages
     struct message_base {
@@ -85,15 +94,25 @@ namespace scs {
         return converted;
     }
 
+    // Generate message_base and cast it to T
+    template<typename T>
+    inline std::shared_ptr<T> get_new_message(){
+        auto new_base = std::make_shared<message_base>();
+        auto casted = std::reinterpret_pointer_cast<T>(new_base);
+        *casted = T();
+        return casted;
+    }
+
+    template<typename T>
     void send_message_raw(
             boost::asio::ip::tcp::socket &socket,
-            message_base* message,
+            std::shared_ptr<T> message,
             size_t from,
             size_t to) {
         int msg_size = to - from;
-        boost::asio::const_buffer cbuff(message, msg_size);
+        boost::asio::const_buffer cbuff(message.get(), msg_size);
 
-        auto on_send = [&socket, &message, msg_size, to](
+        auto on_send = [&socket, message, msg_size, to](
                 const boost::system::error_code &error,
                 std::size_t bytes_transferred
         ) {
@@ -111,19 +130,23 @@ namespace scs {
         socket.async_send(cbuff, on_send);
     }
 
-    void send_chat_message_from_cstr(ip::tcp::socket& socket,
-                                     const char* message, size_t size){
-        message_chat m;
-        m.set_message(message, size);
-        send_message_raw(socket, (message_base*)&m, 0, READBUFF_SIZE);
+    void send_chat_message(ip::tcp::socket& socket, std::string& message, std::string& username){
+        auto m = get_new_message<message_chat>();
+        m->set_message(message.c_str(), message.size());
+        m->set_username(username.c_str(), username.size());
+        send_message_raw(socket, m, 0, READBUFF_SIZE);
     }
 
-    void send_chat_message(ip::tcp::socket& socket, message_chat& message){
-        send_message_raw(socket, reinterpret_cast<message_base*>(&message), 0, READBUFF_SIZE);
+    void send_username(ip::tcp::socket& socket, std::string& username){
+        auto m = get_new_message<message_user>();
+        m->set_message(username.c_str(), username.size());
+        send_message_raw(socket, m, 0, READBUFF_SIZE);
     }
 
-    void send_username(ip::tcp::socket& socket, message_user& message){
-        send_message_raw(socket, reinterpret_cast<message_base*>(&message), 0, READBUFF_SIZE);
+    void send_info_code(ip::tcp::socket& socket, HEADER_SUBCODE subcode){
+        auto m = get_new_message<message_info>();
+        m->sub_code = subcode;
+        send_message_raw(socket, m, 0, READBUFF_SIZE);
     }
 
         /*

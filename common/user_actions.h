@@ -90,6 +90,7 @@ namespace scs{
             // This check is a special case
             if (new_input == "/exit") {
                 ios->stop();
+                return true;
                 break;
             }
             auto parsed = scs::receive_and_parse_input(new_input);
@@ -117,7 +118,8 @@ namespace scs{
             // Send chat message to socket (Only for client)
             else {
                 if (socket != nullptr){
-                    send_chat_message_from_cstr(*target_socket, new_input.c_str(), new_input.size());
+                    std::string username_decoy(" ");
+                    send_chat_message(*target_socket, new_input, username_decoy);
                 }
             }
 

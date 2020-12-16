@@ -25,22 +25,6 @@ namespace scs{
     // A list of active connections. Last connection record is always reserved for new connection
     std::shared_ptr<std::list<connection_record>> active_connections;
 
-    void async_write(std::u16string& message, ip::tcp::socket& socket, int from = 0){
-        const boost::asio::const_buffer buff {message.c_str() + from, message.size() * sizeof (int16_t)};
-        int message_length = message.size() * sizeof (int16_t);
-        auto callback = [&, message_length](const boost::system::error_code& error,
-                                            std::size_t bytes_sent) {
-            if (!error){
-                std::cout << "Sent bytes: " << bytes_sent << " of " << message_length << std::endl;
-                if (bytes_sent < message_length){
-                    async_write(message, socket, bytes_sent / sizeof (int16_t));
-                }
-            }
-            else std::cout << "Error while async write!" << std::endl;
-        };
-        socket.async_send(buff, callback);
-    }
-
     void setup(std::string& port){
         int16_t port_int = get_port(port.c_str());
         ip::tcp::endpoint ep(ip::tcp::v4(), port_int);
@@ -82,7 +66,8 @@ namespace scs{
         return true;
     }
 
-    void general_action_send_chat_message_to_all(message_chat& message, std::vector<ip::tcp::socket*>& exclude){
+    void general_action_send_chat_message_to_all(std::string& message, std::string& username,
+                                                 std::vector<ip::tcp::socket*>& exclude){
 
         // Iterate until the previous before the last element - last element is reserved for new connection
         for (auto it = active_connections->begin(); it != --active_connections->end(); it++){
@@ -91,7 +76,7 @@ namespace scs{
                 if (sock == &it->socket) return true;
                 return false;
             })) == exclude.end();
-            if (if_to_send) send_chat_message(it->socket, message);
+            if (if_to_send) send_chat_message(it->socket, message, username);
         }
     }
 
@@ -106,15 +91,19 @@ namespace scs{
                 return false;
             });
 
-            message_chat* converted_from_base = reinterpret_cast<message_chat*>(mb);
             if (sender == active_connections->end()) throw std::runtime_error("Message sender not found");
             if (!(sender->is_allowed_to_write)) {
                 std::cout << "Socket isn't allowed to write. Message not sent" << std::endl;
+                send_info_code(*socket, ERROR_WRITE_NOT_ALLOWED);
                 return;
             }
-            converted_from_base->set_username(sender->username.c_str(), sender->username.size());
+
+            auto converted_from_base = reinterpret_cast<message_chat*>(mb);
+            std::string username(converted_from_base->username);
+            std::string message(converted_from_base->message_body);
+
             std::vector<ip::tcp::socket*> exclude { &(sender->socket) };
-            general_action_send_chat_message_to_all(*converted_from_base, exclude);
+            general_action_send_chat_message_to_all(message, username, exclude);
         }
         catch (std::exception& e){
             std::cout << e.what() << std::endl;
@@ -140,6 +129,7 @@ namespace scs{
         }
         else {
             std::cout << ".. but it is already in use" << std::endl;
+            send_info_code(*socket, ERROR_USERNAME_FAILED);
         }
     };
 
@@ -154,7 +144,7 @@ namespace scs{
     };
 
     void handle_bouncing_actions(ip::tcp::socket* socket, scs::message_base* mb){
-        std::cout << "Socket sent the following code" << mb->code << std::endl;
+        std::cout << "Socket sent the following code " << mb->code << std::endl;
         try{
             bouncing_action_map.at(mb->code)(socket, mb);
         }
@@ -209,7 +199,6 @@ namespace scs{
         setup(port);
         active_connections = std::make_shared<std::list<connection_record>>();
         general_action_add_blank_cr();
-        std::cout << &active_connections << std::endl;
             start_async_accept();
         auto end = std::async(start_reading_from_user, nullptr, &user_action_map, &ios);
         //active_connections

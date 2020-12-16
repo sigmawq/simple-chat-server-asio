@@ -28,16 +28,33 @@ namespace scs{
         std::cout << '[' << casted->username << "]: " << casted->message_body << std::endl;
     }
 
+    void general_action_handle_error(HEADER_SUBCODE error_code){
+        std::cout << "Server error (" << error_code << "): ";
+        std::string desc;
+        switch(error_code){
+            case ERROR_WRITE_NOT_ALLOWED: desc = "Write not allowed"; break;
+            case ERROR_USERNAME_FAILED: desc = "Username change failed"; break;
+        }
+        std::cout << desc << std::endl;
+    }
+
     void general_action_send_username(ip::tcp::socket* socket, std::string& username){
-        message_user message_usr;
-        message_usr.set_message(username.c_str(), username.size());
-        send_message_raw(*socket, (message_base*)&message_usr, 0, READBUFF_SIZE);
+        send_username(*socket, username);
     }
 
     void bouncing_action_on_info(ip::tcp::socket* socket, message_base* mb){
-        switch (reinterpret_cast<message_info*>(mb)->sub_code){
-            // TODO: Implement different errors as subcodes
+        auto casted = reinterpret_cast<message_info*>(mb);
+        if (is_error(casted->sub_code)){
+            general_action_handle_error(casted->sub_code);
+            return;
         }
+        else{
+            switch (casted->sub_code){
+                //TODO
+            }
+        }
+
+
     }
 
     void user_action_change_username(
@@ -47,10 +64,8 @@ namespace scs{
         general_action_send_username(socket, args[0]);
     }
 
-    void internal_action_change_username(ip::tcp::socket* socket, std::string username){
-        message_user new_username;
-        new_username.set_message(username.c_str(), username.size());
-        send_message_raw(*socket, (message_base*)&new_username, 0, READBUFF_SIZE);
+    void internal_action_change_username(ip::tcp::socket* socket, std::string& username){
+        send_username(*socket, username);
     }
 
     std::map<const std::string, user_action_fptr> user_action_map{
@@ -109,16 +124,12 @@ namespace scs{
             std::cout << "Connection failed";
             return;
         }
-
-        // This should be a separate function, but the whole message system needs some rework
-        message_base mb;
-        auto casted = base_to_derived<message_user>(mb);
-        casted->set_message(username.c_str(), username.size());
-        send_username(socket, *casted);
+        scs::username = username;
+        send_username(socket, username);
 
         auto end = std::async(start_reading_from_user, &socket, &user_action_map, &ios);
+
         message_base mb2;
-        mb.erase();
         scs::start_listen_to_socket_continuously(
                 &socket, &mb2, handle_incoming_bouncing_action, handle_socket_eof, 0, READBUFF_SIZE);
 
