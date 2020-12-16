@@ -30,11 +30,6 @@ namespace scs{
         ip::tcp::socket socket;
         std::vector<char> buffer;
 
-        ~connection_record(){
-            socket.shutdown(ip::tcp::socket::shutdown_both);
-            socket.close();
-        }
-
         connection_record(io_context& ios) :
                 socket {ios}, buffer {0}
         {

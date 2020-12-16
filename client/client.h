@@ -53,13 +53,12 @@ namespace scs{
                 //TODO
             }
         }
-
-
     }
 
     void user_action_change_username(
             ip::tcp::socket* socket,
             std::vector<std::string>& args){
+        arg_assert(args, 1);
         if (args[0].size() > USERNAME_SIZE) throw std::runtime_error("Username provided is not valid");
         general_action_send_username(socket, args[0]);
     }
@@ -137,7 +136,6 @@ namespace scs{
         // ========================
         // End is here
         // ========================
-        end.get();
         socket.close();
     }
 }

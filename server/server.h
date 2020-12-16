@@ -99,7 +99,7 @@ namespace scs{
             }
 
             auto converted_from_base = reinterpret_cast<message_chat*>(mb);
-            std::string username(converted_from_base->username);
+            std::string username(sender->username);
             std::string message(converted_from_base->message_body);
 
             std::vector<ip::tcp::socket*> exclude { &(sender->socket) };

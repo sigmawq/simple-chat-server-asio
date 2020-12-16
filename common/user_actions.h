@@ -22,12 +22,12 @@ namespace scs{
         return std::vector<std::string> {il};
     }
 
-    // Returns -1 in case if none were found
+    // Returns last index if none were found
     size_t get_next_non_space_symbol_pos(std::string& str, size_t from){
         for (size_t cpos = from; cpos < str.size(); cpos++){
             if (str[cpos] != ' ') return cpos;
         }
-        return -1;
+        return str.size() - 1;
     }
 
     // Returns a pair of:
@@ -35,22 +35,30 @@ namespace scs{
     // 2. size_t position where it ends in "str"
     std::pair<std::string, size_t> get_next_word(std::string& str, size_t from){
         size_t pos = str.find(' ', from);
-        if (pos == str.npos) pos = str.size() - 1;
-        return
-            std::make_pair(std::string(str.c_str() + from, pos), pos);
+        if (pos == str.npos) pos = str.size();
+
+        size_t offset = pos - from;
+        std::string word(str.c_str() + from, offset);
+        return std::make_pair(word, from + offset - 1);
     }
 
     std::vector<std::string> parse_command_and_arguments(std::string& buffer){
         // Parse command itself
         std::vector<std::string> command_and_args;
         size_t current_pos = 1; // Start from next char after '/'
-        if ((current_pos = get_next_non_space_symbol_pos(buffer, current_pos)) != -1){
+        current_pos = get_next_non_space_symbol_pos(buffer, current_pos);
+
+        while (true){
             auto word_pair = get_next_word(buffer, current_pos);
             command_and_args.push_back(word_pair.first);
-            current_pos = word_pair.second;
-        }
-        else {
-            throw std::runtime_error("Invalid command");
+
+            // Magic number explanation: get_next_word returns the position of the last letter of word in
+            // word pair. Thus, we know that:
+            // 1. word_pair.second is always a letter
+            // 2. word_pair.second + 1 is always a ' ' (space)
+            // Therefore we pick the next potential non-space position: word_pair.second + 2
+            current_pos = word_pair.second + 2;
+            if (current_pos > buffer.size() - 1) break;
         }
         return command_and_args;
     }
@@ -104,6 +112,7 @@ namespace scs{
                     }
                     auto aptr = user_action_map->at(parsed.second[0]);
                     std::vector<std::string> args;
+                    args.resize(parsed.second.size() - 1);
                     std::copy(parsed.second.begin() + 1, parsed.second.end(), args.begin());
                     aptr(target_socket, args);
                 }
@@ -126,6 +135,13 @@ namespace scs{
         }
         return true;
     }
+
+    bool arg_assert(std::vector<std::string>& args, size_t required){
+        if (args.size() < required) {
+          throw std::runtime_error("Invalid argument count\n");
+        }
+    }
+
 }
 
 #endif //SIMPLE_CHAT_SERVER_USER_ACTIONS_H
