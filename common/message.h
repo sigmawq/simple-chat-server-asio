@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <boost/asio.hpp>
 #include "defs.h"
+#include "../logger/logger.h"
 
 using namespace boost::asio;
 
@@ -108,45 +109,45 @@ namespace scs {
             boost::asio::ip::tcp::socket &socket,
             std::shared_ptr<T> message,
             size_t from,
-            size_t to) {
+            size_t to, logger& log) {
         int msg_size = to - from;
         boost::asio::const_buffer cbuff(message.get(), msg_size);
 
-        auto on_send = [&socket, message, msg_size, to](
+        auto on_send = [&socket, &log, message, msg_size, to](
                 const boost::system::error_code &error,
                 std::size_t bytes_transferred
         ) {
             if (!error) {
                 if (bytes_transferred < msg_size) {
-                    std::cout << "  Message partially sent.. (" << bytes_transferred << '/'
-                              << msg_size << std::endl;
-                    send_message_raw(socket, message, bytes_transferred, to);
+                    log.push("  Message partially sent.. (", bytes_transferred, '/', msg_size);
+                    send_message_raw(socket, message, bytes_transferred, to, log);
                 }
-                std::cout << "Message sent!" << std::endl;
-            } else {
-                std::cout << "Error while sending a message: " << error.message() << std::endl;
+                log.push("Message sent");
+            }
+            else {
+                log.push("Error while sending a message: ", error.message());
             }
         };
         socket.async_send(cbuff, on_send);
     }
 
-    void send_chat_message(ip::tcp::socket& socket, std::string& message, std::string& username){
+    void send_chat_message(ip::tcp::socket& socket, std::string& message, std::string& username, logger& log){
         auto m = get_new_message<message_chat>();
         m->set_message(message.c_str(), message.size());
         m->set_username(username.c_str(), username.size());
-        send_message_raw(socket, m, 0, READBUFF_SIZE);
+        send_message_raw(socket, m, 0, READBUFF_SIZE, log);
     }
 
-    void send_username(ip::tcp::socket& socket, std::string& username){
+    void send_username(ip::tcp::socket& socket, std::string& username, logger& log){
         auto m = get_new_message<message_user>();
         m->set_message(username.c_str(), username.size());
-        send_message_raw(socket, m, 0, READBUFF_SIZE);
+        send_message_raw(socket, m, 0, READBUFF_SIZE, log);
     }
 
-    void send_info_code(ip::tcp::socket& socket, HEADER_SUBCODE subcode){
+    void send_info_code(ip::tcp::socket& socket, HEADER_SUBCODE subcode, logger& log){
         auto m = get_new_message<message_info>();
         m->sub_code = subcode;
-        send_message_raw(socket, m, 0, READBUFF_SIZE);
+        send_message_raw(socket, m, 0, READBUFF_SIZE, log);
     }
 
         /*
@@ -156,30 +157,30 @@ namespace scs {
         void start_listen_to_socket_continuously(
                 ip::tcp::socket* socket, message_base* buffer,
                 bouncing_action_fptr handler, eof_handler eof_h,
-                int from, int to
+                int from, int to, logger& logger
         ) {
             std::size_t buffer_size = to - from;
             boost::asio::mutable_buffer cbuff{(void *) buffer, buffer_size};
             socket->async_receive(
-                    cbuff,[socket, to, from, handler, eof_h, buffer, buffer_size]
+                    cbuff,[socket, to, from, handler, eof_h, buffer, buffer_size, &logger]
             (const boost::system::error_code &err, std::size_t bytes_read) {
                 if (!err) {
                     if (bytes_read < buffer_size) {
                         start_listen_to_socket_continuously(socket, buffer, handler,
-                                                            eof_h, bytes_read, to);
+                                                            eof_h, bytes_read, to, logger);
                         return;
                     } else {
                         handler(socket, buffer);
                         buffer->erase();
                         start_listen_to_socket_continuously(socket, buffer, handler,
-                                                            eof_h, 0, to);
+                                                            eof_h, 0, to, logger);
                     }
                 }
                 else if (err.value() == boost::asio::error::eof){
                     eof_h(socket);
                 }
                 else {
-                    std::cout << "Error while receiving from socket: " << err.message() << std::endl;
+                    logger.push("Error while receiving from socket: ", err.message());
                 }
             });
         }

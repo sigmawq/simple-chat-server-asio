@@ -26,15 +26,15 @@
 
 
 class logger {
-    std::string write_path;
-    bool started_nl;
-    bool if_cout;
     std::ofstream handle;
 
     // Name will be log<current_date_and_time>.txt
     static std::string get_timestamp(bool spacefree = false);
+
     void create_new_log_file(std::filesystem::path& path);
+
     void handle_provided_path(std::filesystem::path& path);
+
     void initialize(std::filesystem::path& path);
 
     // Base case
@@ -42,6 +42,7 @@ class logger {
     void push_same_line() {
         PUSH_NL();
         handle << '\n';
+        handle.flush();
     }
 
     template<typename Head, typename... Tail>
@@ -59,6 +60,8 @@ public:
 
     // Log file will be created in current directory
     logger();
+
+    logger(const logger& other) = delete;
 
     // Push a message to logger
     template<typename Head, typename... Tail >

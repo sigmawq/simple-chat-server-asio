@@ -22,26 +22,26 @@ namespace scs{
     io_context ios;
     ip::tcp::socket socket {ios};
     ip::tcp::endpoint endpoint;
-    logger log { "./logs" };
+    logger log { "./logs-client" };
 
     // Means server sent a chat message, output it
     void bouncing_action_on_chat_message(ip::tcp::socket* socket, message_base* mb){
         auto casted = reinterpret_cast<message_chat*>(mb);
-        std::cout << '[' << casted->username << "]: " << casted->message_body << std::endl;
+        log.push('[', casted->username, "]: ", casted->message_body);
     }
 
     void general_action_handle_error(HEADER_SUBCODE error_code){
-        std::cout << "Server error (" << error_code << "): ";
         std::string desc;
         switch(error_code){
             case ERROR_WRITE_NOT_ALLOWED: desc = "Write not allowed"; break;
             case ERROR_USERNAME_FAILED: desc = "Username change failed"; break;
+            default: desc = "Description not provided";
         }
-        std::cout << desc << std::endl;
+        log.push("Server error (", error_code, "): ", desc);
     }
 
     void general_action_send_username(ip::tcp::socket* socket, std::string& username){
-        send_username(*socket, username);
+        send_username(*socket, username, log);
     }
 
     void bouncing_action_on_info(ip::tcp::socket* socket, message_base* mb){
@@ -66,7 +66,7 @@ namespace scs{
     }
 
     void internal_action_change_username(ip::tcp::socket* socket, std::string& username){
-        send_username(*socket, username);
+        send_username(*socket, username, log);
     }
 
     std::map<const std::string, user_action_fptr> user_action_map{
@@ -83,12 +83,12 @@ namespace scs{
             bouncing_action_map.at(mb->code)(socket, mb);
         }
         catch (std::out_of_range& e){
-            std::cout << "An internal action code: " << mb->code << " failed to have been processed" << std::endl;
+            log.push("An internal action code: ", mb->code, " failed to be processed");
         }
     }
 
     void handle_socket_eof(ip::tcp::socket* socket){
-        std::cout << "Server closed connection" << std::endl;
+        log.push("Server closed connection");
         ios.stop();
     }
 
@@ -96,24 +96,13 @@ namespace scs{
         socket.close();
     }
 
-    bool connect(std::string& address, std::string& port){
-        try{
-            int16_t port_int = get_port(port.c_str());
-            endpoint = ip::tcp::endpoint(
-                    boost::asio::ip::address::from_string(address),
-                    port_int);
-            socket.connect(endpoint);
-            std::cout << "Connected to " << endpoint.address().to_string() << std::endl;
-            return true;
-        }
-        catch (std::exception& e){
-            std::cout << e.what() << std::endl;
-            return false;
-        }
-        catch (boost::system::system_error& e){
-            std::cout << e.what() << std::endl;
-            return false;
-        }
+    void connect(std::string& address, std::string& port){
+        int16_t port_int = get_port(port.c_str());
+        endpoint = ip::tcp::endpoint(
+                boost::asio::ip::address::from_string(address),
+                port_int);
+        socket.connect(endpoint);
+        log.push("Connected to ", endpoint.address().to_string(), ':', port);
     }
 
     void stop(){
@@ -121,18 +110,27 @@ namespace scs{
     }
 
     void launch(std::string& address, std::string& port, std::string& username){
-        if (!connect(address, port)){
-            std::cout << "Connection failed";
-            return;
-        }
         scs::username = username;
-        send_username(socket, username);
+        send_username(socket, username, log);
+        log.push(
+                "username/address/port: ", username, ' ', address, ' ', port);
 
-        auto end = std::async(start_reading_from_user, &socket, &user_action_map, &ios);
+        log.push("Starting scs-client..");
+        try {
+            connect(address, port);
+        }
+        catch(std::exception const& e){
+            log.push("Connection failed: ", e.what());
+        }
+        catch(...){
+            log.push("Connection failed: ", "unexpected exception");
+        }
+
+        auto end = std::async(start_reading_from_user, &socket, &user_action_map, &ios, &log);
 
         message_base mb2;
         scs::start_listen_to_socket_continuously(
-                &socket, &mb2, handle_incoming_bouncing_action, handle_socket_eof, 0, READBUFF_SIZE);
+                &socket, &mb2, handle_incoming_bouncing_action, handle_socket_eof, 0, READBUFF_SIZE, log);
 
         ios.run();
         // ========================

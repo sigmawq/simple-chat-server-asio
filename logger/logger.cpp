@@ -2,26 +2,23 @@
 // Created by swql on 12/19/20.
 //
 
-#include <fstream>
 #include "logger.h"
 
 void logger::handle_provided_path(std::filesystem::path &path) {
     {
         try{
-            if (std::filesystem::exists(path)){
-                if (std::filesystem::is_directory(path)){
-                    create_new_log_file(path);
-                }
-                else{
-                    throw std::runtime_error("Provided path is not a directory");
-                }
-            }
-            else {
+            if (!std::filesystem::exists(path)) {
                 std::filesystem::create_directory(path);
+            }
+            if (std::filesystem::is_directory(path)){
+                create_new_log_file(path);
+            }
+            else{
+                throw std::runtime_error("Provided path is not a directory");
             }
         }
         catch (std::runtime_error& err){
-            std::cout << err.what() << std::endl;
+            std::cout << "[Logger error on init]: " << err.what() << std::endl;
         }
 
     }
@@ -35,8 +32,11 @@ void logger::create_new_log_file(std::filesystem::path &path) {
 }
 
 logger::logger(std::filesystem::path& path)
-: if_cout(if_cout), started_nl(false)
 {
+    initialize(path);
+}
+
+logger::logger(std::filesystem::path path) {
     initialize(path);
 }
 
@@ -68,5 +68,3 @@ void logger::initialize(std::filesystem::path &path) {
         }
     }
 }
-
-

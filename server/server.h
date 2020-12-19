@@ -9,10 +9,12 @@
 #include <boost/bind.hpp>
 #include <map>
 #include <list>
+#include "../logger/logger.h"
 #include "../common/scs-utility.h"
 #include "../common/message.h"
 #include "../common/user_actions.h"
 #include "../common/defs.h"
+
 
 using namespace boost::asio;
 
@@ -21,6 +23,7 @@ namespace scs{
 
     io_context ios;
     ip::tcp::acceptor acceptor {ios};
+    logger log { "./logs-server" };
 
     // A list of active connections. Last connection record is always reserved for new connection
     std::shared_ptr<std::list<connection_record>> active_connections;
@@ -76,7 +79,7 @@ namespace scs{
                 if (sock == &it->socket) return true;
                 return false;
             })) == exclude.end();
-            if (if_to_send) send_chat_message(it->socket, message, username);
+            if (if_to_send) send_chat_message(it->socket, message, username, log);
         }
     }
 
@@ -94,7 +97,7 @@ namespace scs{
             if (sender == active_connections->end()) throw std::runtime_error("Message sender not found");
             if (!(sender->is_allowed_to_write)) {
                 std::cout << "Socket isn't allowed to write. Message not sent" << std::endl;
-                send_info_code(*socket, ERROR_WRITE_NOT_ALLOWED);
+                send_info_code(*socket, ERROR_WRITE_NOT_ALLOWED, log);
                 return;
             }
 
@@ -129,7 +132,7 @@ namespace scs{
         }
         else {
             std::cout << ".. but it is already in use" << std::endl;
-            send_info_code(*socket, ERROR_USERNAME_FAILED);
+            send_info_code(*socket, ERROR_USERNAME_FAILED, log);
         }
     };
 
@@ -180,7 +183,7 @@ namespace scs{
                     &(active_connections->back().socket),
                     (message_base*)(active_connections->back().buffer.data()),
                     &handle_bouncing_actions, &handle_socket_eof,
-                    0, READBUFF_SIZE);
+                    0, READBUFF_SIZE, log);
         }
         else{
             std::cout << "Error: " << error.message() << std::endl;
@@ -202,14 +205,12 @@ namespace scs{
         active_connections = std::make_shared<std::list<connection_record>>();
         general_action_add_blank_cr();
             start_async_accept();
-        auto end = std::async(start_reading_from_user, nullptr, &user_action_map, &ios);
-        //active_connections
+        auto end = std::async(start_reading_from_user, nullptr, &user_action_map, &ios, &log);
         ios.run();
         // End is here
         end.get();
         acceptor.close();
     }
 };
-
 
 #endif //UNTITLED_SERVER_H

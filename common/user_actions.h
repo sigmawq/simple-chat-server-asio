@@ -88,7 +88,7 @@ namespace scs{
     bool start_reading_from_user(ip::tcp::socket* target_socket,
                                  std::map<const std::string,
                                  user_action_fptr>* user_action_map,
-                                 io_context* ios
+                                 io_context* ios, logger* log
             ){
         bool runs = true;
         while (true){
@@ -128,7 +128,7 @@ namespace scs{
             else {
                 if (socket != nullptr){
                     std::string username_decoy(" ");
-                    send_chat_message(*target_socket, new_input, username_decoy);
+                    send_chat_message(*target_socket, new_input, username_decoy, *log);
                 }
             }
 
@@ -136,7 +136,7 @@ namespace scs{
         return true;
     }
 
-    bool arg_assert(std::vector<std::string>& args, size_t required){
+    void arg_assert(std::vector<std::string>& args, size_t required){
         if (args.size() < required) {
           throw std::runtime_error("Invalid argument count\n");
         }
