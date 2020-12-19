@@ -1,8 +1,5 @@
 //
 // Created by swql on 12/12/20.
-/*
- * This header is here only to avoid cyclic dependencies
- */
 //
 
 #ifndef SIMPLE_CHAT_SERVER_DEFS_H

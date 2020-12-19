@@ -162,8 +162,10 @@ namespace scs{
             }
             return false;
         });
+        std::cout << eof_sock->remote_endpoint().address().to_string() << "/"
+                  << it->username
+                  << " closed connection" << std::endl;
         active_connections->erase(it);
-        std::cout << "Some socket closed connection" << std::endl;
         // TODO: Make it better
     }
 

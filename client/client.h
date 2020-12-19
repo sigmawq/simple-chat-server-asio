@@ -13,6 +13,7 @@
 #include "../common/message.h"
 #include "../common/user_actions.h"
 #include "../common/bouncing_actions.h"
+#include "../logger/logger.h"
 
 using namespace boost::asio;
 
@@ -21,6 +22,7 @@ namespace scs{
     io_context ios;
     ip::tcp::socket socket {ios};
     ip::tcp::endpoint endpoint;
+    logger log { "./logs" };
 
     // Means server sent a chat message, output it
     void bouncing_action_on_chat_message(ip::tcp::socket* socket, message_base* mb){
