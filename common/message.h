@@ -37,7 +37,7 @@ namespace scs {
     };
 
     bool is_error(HEADER_SUBCODE subcode){
-        if (subcode > _ERROR_SECTION_START && subcode <= _ERROR_SECTION_END){
+        if (subcode > _ERROR_SECTION_START && subcode < _ERROR_SECTION_END){
             return true;
         }
         return false;
@@ -112,6 +112,10 @@ namespace scs {
             size_t to, logger& log) {
         int msg_size = to - from;
         boost::asio::const_buffer cbuff(message.get(), msg_size);
+        log.push(
+                "Sending message of type ", typeid(message.get()).name(),
+                '(', "code: ", message->code , ')',
+                " to ", socket.remote_endpoint().address().to_string());
 
         auto on_send = [&socket, &log, message, msg_size, to](
                 const boost::system::error_code &error,
@@ -131,7 +135,7 @@ namespace scs {
         socket.async_send(cbuff, on_send);
     }
 
-    void send_chat_message(ip::tcp::socket& socket, std::string& message, std::string& username, logger& log){
+    void send_chat_message(ip::tcp::socket& socket, std::string& message, const std::string& username, logger& log){
         auto m = get_new_message<message_chat>();
         m->set_message(message.c_str(), message.size());
         m->set_username(username.c_str(), username.size());
@@ -157,30 +161,31 @@ namespace scs {
         void start_listen_to_socket_continuously(
                 ip::tcp::socket* socket, message_base* buffer,
                 bouncing_action_fptr handler, eof_handler eof_h,
-                int from, int to, logger& logger
+                int from, int to, logger& log
         ) {
             std::size_t buffer_size = to - from;
             boost::asio::mutable_buffer cbuff{(void *) buffer, buffer_size};
             socket->async_receive(
-                    cbuff,[socket, to, from, handler, eof_h, buffer, buffer_size, &logger]
+                    cbuff,[socket, to, from, handler, eof_h, buffer, buffer_size, &log]
             (const boost::system::error_code &err, std::size_t bytes_read) {
                 if (!err) {
                     if (bytes_read < buffer_size) {
                         start_listen_to_socket_continuously(socket, buffer, handler,
-                                                            eof_h, bytes_read, to, logger);
+                                                            eof_h, bytes_read, to, log);
                         return;
                     } else {
+                        log.push("Received a message of type: ", buffer->code);
                         handler(socket, buffer);
                         buffer->erase();
                         start_listen_to_socket_continuously(socket, buffer, handler,
-                                                            eof_h, 0, to, logger);
+                                                            eof_h, 0, to, log);
                     }
                 }
                 else if (err.value() == boost::asio::error::eof){
                     eof_h(socket);
                 }
                 else {
-                    logger.push("Error while receiving from socket: ", err.message());
+                    log.push("Error while receiving from socket: ", err.message());
                 }
             });
         }

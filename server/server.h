@@ -1,5 +1,6 @@
 //
 // Created by swql on 12/5/20.
+// Username starting from '$' is reserved by server
 //
 
 #ifndef UNTITLED_SERVER_H
@@ -24,6 +25,7 @@ namespace scs{
     io_context ios;
     ip::tcp::acceptor acceptor {ios};
     logger log { "./logs-server" };
+    const std::string server_username_signature = "$";
 
     // A list of active connections. Last connection record is always reserved for new connection
     std::shared_ptr<std::list<connection_record>> active_connections;
@@ -61,6 +63,7 @@ namespace scs{
     }
 
     bool general_action_validate_username(std::string& username){
+        if (username[0] == '$') { return false; }
         for (auto& connection : *active_connections){
             if (connection.username == username){
                 return false;
@@ -69,7 +72,8 @@ namespace scs{
         return true;
     }
 
-    void general_action_send_chat_message_to_all(std::string& message, std::string& username,
+    // If you want to send a message from server, username should start from '$'
+    void general_action_send_chat_message_to_all(std::string& message, const std::string& username,
                                                  std::vector<ip::tcp::socket*>& exclude){
 
         // Iterate until the previous before the last element - last element is reserved for new connection
@@ -83,9 +87,13 @@ namespace scs{
         }
     }
 
+    void user_action_send_msg_to_all(ip::tcp::socket* socket, std::vector<std::string>& args){
+        arg_assert(args, 1);
+        std::vector<ip::tcp::socket*> empty_exclude;
+        general_action_send_chat_message_to_all(args[0], server_username_signature, empty_exclude);
+    }
+
     void bouncing_action_on_chat_message(ip::tcp::socket* socket, message_base* mb){
-        std::cout << "Socket sent a message " << reinterpret_cast<message_chat*>(mb)->message_body
-        << std::endl;
         try{
             auto sender = std::find_if(active_connections->begin(), active_connections->end()--, [&](connection_record& cr){
                 if (&cr.socket == socket){
@@ -104,6 +112,7 @@ namespace scs{
             auto converted_from_base = reinterpret_cast<message_chat*>(mb);
             std::string username(sender->username);
             std::string message(converted_from_base->message_body);
+            output_message(username, message, log);
 
             std::vector<ip::tcp::socket*> exclude { &(sender->socket) };
             general_action_send_chat_message_to_all(message, username, exclude);
@@ -143,7 +152,8 @@ namespace scs{
 
     std::map<const std::string, user_action_fptr> user_action_map{
             {"sinfo", &user_action_get_server_info},
-            {"show-active", &user_action_get_active_connections}
+            {"show-active", &user_action_get_active_connections},
+            {"msg-all", &user_action_send_msg_to_all}
     };
 
     void handle_bouncing_actions(ip::tcp::socket* socket, scs::message_base* mb){
@@ -173,6 +183,7 @@ namespace scs{
     }
 
     void start_async_accept();
+
     void handle_connection(const boost::system::error_code& error){
         if (!error){
             // This part is bad, I know
@@ -205,7 +216,7 @@ namespace scs{
         active_connections = std::make_shared<std::list<connection_record>>();
         general_action_add_blank_cr();
             start_async_accept();
-        auto end = std::async(start_reading_from_user, nullptr, &user_action_map, &ios, &log);
+        auto end = std::async(start_reading_from_user, nullptr, &user_action_map, &ios, &log, true);
         ios.run();
         // End is here
         end.get();

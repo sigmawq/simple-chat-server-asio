@@ -65,8 +65,8 @@ namespace scs{
 
     // Returns a tuple of 2 elements: <is_a_command (bool), command_and_args_or_just_message (vector<string>)>
     // If is_a_command is true and if resulting vector is of size() zero that means command is not of valid format
-    std::pair<bool, std::vector<std::string>>
-                                                    receive_and_parse_input(std::string& buffer){
+    std::pair<bool, std::vector<std::string>> receive_and_parse_input(std::string& buffer){
+
         // Process command and arguments
         if (buffer[0] == '/'){
             try{
@@ -83,12 +83,12 @@ namespace scs{
         }
     }
 
-    // Use server socket value for client side
-    // and nullptr value for server
+    // if ignore_userinput is true then messages will not be processed
+    // but commands (starting with '/') will.
     bool start_reading_from_user(ip::tcp::socket* target_socket,
                                  std::map<const std::string,
                                  user_action_fptr>* user_action_map,
-                                 io_context* ios, logger* log
+                                 io_context* ios, logger* log, bool ignore_userinput = false
             ){
         bool runs = true;
         while (true){
@@ -126,7 +126,7 @@ namespace scs{
 
             // Send chat message to socket (Only for client)
             else {
-                if (socket != nullptr){
+                if (!ignore_userinput){
                     std::string username_decoy(" ");
                     send_chat_message(*target_socket, new_input, username_decoy, *log);
                 }

@@ -1,3 +1,5 @@
+#define LOGGER_TO_COUT
+
 #include <iostream>
 #include "client.h"
 

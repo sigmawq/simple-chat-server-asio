@@ -37,6 +37,24 @@ namespace scs{
             destination[i] = source[i];
         }
     }
+
+    void output_message(std::string& username, std::string mbody, logger& log){
+        char username_sign_1 = '[';
+        std::string username_sign_2 = "]: ";
+        if (username[0] == '$'){
+            // Handle message from server
+            username_sign_1 = '<';
+            username_sign_2 = ">: ";
+            username = "SERVER";
+        }
+        std::string message;
+        message += username_sign_1;
+        message.append(username);
+        message += username_sign_2;
+        message.append(mbody);
+        std::cout << message << std::endl;
+        log.pushp("Message received", message);
+    }
 }
 
 #endif //UNTITLED_SCS_UTILITY_H
